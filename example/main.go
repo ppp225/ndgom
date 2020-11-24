@@ -37,7 +37,7 @@ func dgNewClient() *dgo.Dgraph {
 
 type erement struct {
 	UID  string   `json:"uid,omitempty"`
-	Type []string `json:"dgraph.type,omitempty"`
+	Type []string `json:"dgraph.type,omitempty" dgtype:"Element"`
 	Name string   `json:"elementName,omitempty"`
 }
 
@@ -72,12 +72,12 @@ func main() {
 	defer txn.Discard()
 
 	var e []erement
-	err = ndgom.Get(txn, "Element", "elementName", "Test", &e)
+	err = ndgom.Get(txn, "elementName", "Test", &e)
 	log.Println(e)
 	log.Println(err)
 
 	var e2 erement
-	err = ndgom.GetOne(txn, "Element", "elementName", "Test", &e2)
+	err = ndgom.GetOne(txn, "elementName", "Test", &e2)
 	log.Println(e2)
 	log.Println(err)
 }
