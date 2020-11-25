@@ -1,7 +1,6 @@
 package ndgom
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -14,11 +13,7 @@ func GetByID(txn *ndgo.Txn, uid string, result interface{}) (err error) {
 		return err
 	}
 	dgType := getDgType(result)
-	resp, err := ndgo.Query{}.GetUIDExpandType("q", "uid", uid, "", "", "uid dgraph.type", dgType).Run(txn)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToObject(resp.GetJson()), &result)
+	return Stateless{}.GetByID(txn, uid, dgType, result)
 }
 
 // Get makes db query and unmarshals results as array
@@ -27,11 +22,7 @@ func Get(txn *ndgo.Txn, predicate, value string, result interface{}) (err error)
 		return err
 	}
 	dgType := getDgType(result)
-	resp, err := ndgo.Query{}.GetPredExpandType("q", "eq", predicate, value, "", "", "uid dgraph.type", dgType).Run(txn)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToArray(resp.GetJson()), &result)
+	return Stateless{}.Get(txn, predicate, value, dgType, result)
 }
 
 // GetOne makes db query and unmarshals first result as object
@@ -40,11 +31,7 @@ func GetOne(txn *ndgo.Txn, predicate, value string, result interface{}) (err err
 		return err
 	}
 	dgType := getDgType(result)
-	resp, err := ndgo.Query{}.GetPredExpandType("q", "eq", predicate, value, ",first:1", "", "uid dgraph.type", dgType).Run(txn)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToObject(resp.GetJson()), &result)
+	return Stateless{}.GetOne(txn, predicate, value, dgType, result)
 }
 
 // New creates new node. Do not set UID or Type.
@@ -53,13 +40,13 @@ func New(txn *ndgo.Txn, obj interface{}) (err error) {
 	if err = validateInput(obj); err != nil {
 		return err
 	}
-	setFieldsForNew(obj)
-	resp, err := txn.Seti(obj)
+	setFieldsForNew("new", obj)
+	uidMap, err := Stateless{}.New(txn, obj)
 	if err != nil {
 		return err
 	}
-	setRespUID(resp.Uids["new"], obj)
-	return err
+	setRespUID(uidMap["new"], obj)
+	return nil
 }
 
 func validateInput(obj interface{}) error {
@@ -71,7 +58,7 @@ func validateInput(obj interface{}) error {
 
 // setFieldsForNew sets uid to _:new and type to dgtype tag value
 // panics when uid is set or when type is set but doesn't contain dgtype value.
-func setFieldsForNew(obj interface{}) {
+func setFieldsForNew(uid string, obj interface{}) {
 	t := reflect.TypeOf(obj).Elem()
 	// validate if fields exist how we need them
 	if err := fieldsOK(t); err != nil {
@@ -82,7 +69,7 @@ func setFieldsForNew(obj interface{}) {
 	if uidField.String() != "" {
 		panic("uid will be set for you when creating new objects, don't create it yourself")
 	}
-	uidField.SetString("_:new")
+	uidField.SetString("_:" + uid)
 	// validate and set dgType
 	dgTypeField := reflect.ValueOf(obj).Elem().FieldByName("Type")
 	dgTypes := dgTypeField.Interface().([]string) // is slice
