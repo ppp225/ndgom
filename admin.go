@@ -11,11 +11,12 @@ import (
 // Usage: ndgom.Admin{}.
 type Admin struct{}
 
+// DropDB does indeed nuke all DB data, returning it to a virgin state
+func (Admin) DropDB(dg *dgo.Dgraph) error {
+	return dg.Alter(context.Background(), &api.Operation{DropAll: true})
+}
+
 // MigrateSchema runs schema migration
-func (Admin) MigrateSchema(dg *dgo.Dgraph, dgSchema string) (err error) {
-	ctx := context.Background()
-	err = dg.Alter(ctx, &api.Operation{
-		Schema: dgSchema,
-	})
-	return err
+func (Admin) MigrateSchema(dg *dgo.Dgraph, schema string) error {
+	return dg.Alter(context.Background(), &api.Operation{Schema: schema})
 }

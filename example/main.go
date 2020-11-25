@@ -35,7 +35,7 @@ func dgNewClient() *dgo.Dgraph {
 	)
 }
 
-type erement struct {
+type DbElement struct {
 	UID  string   `json:"uid,omitempty"`
 	Type []string `json:"dgraph.type,omitempty" dgtype:"Element"`
 	Name string   `json:"elementName,omitempty"`
@@ -44,40 +44,67 @@ type erement struct {
 func main() {
 	dg := dgNewClient()
 
-	// add schema
+	// recreate db
+	err := ndgom.Admin{}.DropDB(dg)
+	if err != nil {
+		panic(err)
+	}
 	schema := `
-		<elementName>: string @index(hash) @upsert .
+	<elementName>: string @index(hash) @upsert .
 
-		type Element {
-			elementName: string
-		  }
-		`
-	err := ndgom.Admin{}.MigrateSchema(dg, schema)
-	log.Println(err)
+	type Element {
+		elementName: string
+	  }
+	`
+	err = ndgom.Admin{}.MigrateSchema(dg, schema)
+	if err != nil {
+		panic(err)
+	}
 
 	// add new element
 	txn := ndgo.NewTxnWithoutContext(dg.NewTxn())
 	defer txn.Discard()
-	newEl := erement{
-		Type: []string{"Element"},
+	new1 := DbElement{
 		Name: "Test",
 	}
-	resp, err := txn.Seti(newEl)
-	log.Println(resp)
-	log.Println(err)
+	err = ndgom.New(txn, &new1)
+	if err != nil {
+		panic(err)
+	}
+
+	new2 := DbElement{
+		Name: "Test",
+	}
+	err = ndgom.New(txn, &new2)
+	if err != nil {
+		panic(err)
+	}
+	// log.Println(resp)
 	txn.Commit()
 
 	// query
 	txn = ndgo.NewTxnWithoutContext(dg.NewTxn())
 	defer txn.Discard()
 
-	var e []erement
+	var e []DbElement
 	err = ndgom.Get(txn, "elementName", "Test", &e)
+	if err != nil {
+		panic(err)
+	}
 	log.Println(e)
-	log.Println(err)
 
-	var e2 erement
+	var e2 DbElement
 	err = ndgom.GetOne(txn, "elementName", "Test", &e2)
+	if err != nil {
+		panic(err)
+	}
 	log.Println(e2)
-	log.Println(err)
+
+	var e3 DbElement
+	err = ndgom.GetByID(txn, new2.UID, &e3)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(e3)
+
 }
