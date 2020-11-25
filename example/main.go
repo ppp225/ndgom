@@ -80,7 +80,10 @@ func main() {
 		panic(err)
 	}
 	// log.Println(resp)
-	txn.Commit()
+	err = txn.Commit()
+	if err != nil {
+		panic(err)
+	}
 
 	// query
 	txn = ndgo.NewTxnWithoutContext(dg.NewTxn())
@@ -106,5 +109,35 @@ func main() {
 		panic(err)
 	}
 	log.Println(e3)
+
+	// upd
+	txn = ndgo.NewTxnWithoutContext(dg.NewTxn())
+	defer txn.Discard()
+
+	upd1 := DbElement{
+		UID:  e2.UID,
+		Name: "Test3",
+	}
+
+	err = ndgom.Upd(txn, &upd1)
+	if err != nil {
+		panic(err)
+	}
+	err = txn.Commit()
+	if err != nil {
+		panic(err)
+	}
+
+	log.Println(upd1)
+
+	txn = ndgo.NewTxnWithoutContext(dg.NewTxn())
+	defer txn.Discard()
+
+	var e4 DbElement
+	err = ndgom.GetByID(txn, e2.UID, &e4)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(e4)
 
 }

@@ -7,6 +7,11 @@ import (
 	"github.com/ppp225/ndgo"
 )
 
+var (
+	ErrUpsertUID = fmt.Errorf("uid of object must be set to uid(U)")
+	ErrNotExist  = fmt.Errorf("object of requested type and uid does not exist")
+)
+
 // GetByID makes db query by uid and unmarshals result as object
 func GetByID(txn *ndgo.Txn, uid string, result interface{}) (err error) {
 	if err = validateInput(result); err != nil {
@@ -49,11 +54,41 @@ func New(txn *ndgo.Txn, obj interface{}) (err error) {
 	return nil
 }
 
+// Upd updates node based on uid and changed fields, and unmarshals updated result into supplied obj
+func Upd(txn *ndgo.Txn, obj interface{}) (err error) {
+	if err = validateInput(obj); err != nil {
+		return err
+	}
+	dgType := getDgType(obj)
+	uid := updGetUIDSetUID(obj)
+	err = Stateless{}.Upd(txn, uid, dgType, obj)
+	if err != nil {
+		return err
+	}
+	return Stateless{}.GetByID(txn, uid, dgType, obj)
+}
+
 func validateInput(obj interface{}) error {
 	if reflect.TypeOf(obj).Kind() != reflect.Ptr {
 		return fmt.Errorf("ndgom input needs to be *pointer, but is: %s", reflect.TypeOf(obj).Kind().String())
 	}
 	return nil
+}
+
+func updGetUIDSetUID(obj interface{}) (uid string) {
+	t := reflect.TypeOf(obj).Elem()
+	// validate if fields exist how we need them
+	if err := fieldsOK(t); err != nil {
+		panic(err)
+	}
+	// validate and set uid
+	uidField := reflect.ValueOf(obj).Elem().FieldByName("UID")
+	uid = uidField.String()
+	if len(uid) < 3 || uid[:2] != "0x" {
+		panic("uid is required and should have format 0x123")
+	}
+	uidField.SetString("uid(U)")
+	return uid
 }
 
 // setFieldsForNew sets uid to _:new and type to dgtype tag value

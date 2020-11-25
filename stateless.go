@@ -1,12 +1,16 @@
 package ndgom
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ppp225/ndgo"
 )
 
-// Stateless groups stateless lower abstraction helpers. Does not use magic like reflection.
+// Stateless groups stateless lower abstraction helpers.
+// Does not use magic like reflection.
+// Each helper does one db operation.
 // Usage: ndgom.Stateless{}.
 type Stateless struct{}
 
@@ -41,4 +45,39 @@ func (Stateless) GetOne(txn *ndgo.Txn, predicate, value, dgTypes string, result 
 func (Stateless) New(txn *ndgo.Txn, obj interface{}) (uid map[string]string, err error) {
 	resp, err := txn.Seti(obj)
 	return resp.GetUids(), err
+}
+
+// Upd updates node of specified uid.
+// Updated object should have set uid to `uid(U)`. Actual uid to update should be in the method.
+// Doesn't result in complete updated object! (like Stateless{}.Get/New does)
+func (Stateless) Upd(txn *ndgo.Txn, uid, dgTypes string, obj interface{}) (err error) {
+	jsonBytes, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	// check if obj has uid set to correctly work with upsert
+	if !bytes.Contains(jsonBytes, []byte(`"uid":"uid(U)"`)) {
+		return fmt.Errorf("ndgom.Stateless{}.Upd: %w", ErrUpsertUID)
+	}
+	// construct upsert
+	q := fmt.Sprintf(`
+	query {
+	  U as q(func: uid(%s)) @filter(eq(dgraph.type, %s)) {
+	    uid
+	    dgraph.type
+	    expand(_all_)
+	  }
+	}`, uid, dgTypes)
+	// only update if uid of specified type found
+	cond := "@if(eq(len(U), 1))"
+	resp, err := txn.DoSetb(q, cond, jsonBytes, nil)
+	if err != nil {
+		return err
+	}
+	// check if obj of requested uid/type existed. If it didn't, query result will be "q":[{}]
+	existingObj := ndgo.Unsafe{}.FlattenRespToObject(resp.GetJson())
+	if len(existingObj) == 2 {
+		return fmt.Errorf("ndgom.Stateless{}.Upd: %w", ErrNotExist)
+	}
+	return nil
 }
