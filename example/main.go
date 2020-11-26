@@ -67,7 +67,7 @@ func main() {
 	new1 := DbElement{
 		Name: "Test",
 	}
-	err = ndgom.New(txn, &new1)
+	err = ndgom.Simple{}.New(txn, &new1)
 	if err != nil {
 		panic(err)
 	}
@@ -75,7 +75,7 @@ func main() {
 	new2 := DbElement{
 		Name: "Test",
 	}
-	err = ndgom.New(txn, &new2)
+	err = ndgom.Simple{}.New(txn, &new2)
 	if err != nil {
 		panic(err)
 	}
@@ -90,21 +90,21 @@ func main() {
 	defer txn.Discard()
 
 	var e []DbElement
-	err = ndgom.Get(txn, "elementName", "Test", &e)
+	err = ndgom.Simple{}.Get(txn, "elementName", "Test", &e)
 	if err != nil {
 		panic(err)
 	}
 	log.Println(e)
 
 	var e2 DbElement
-	err = ndgom.GetOne(txn, "elementName", "Test", &e2)
+	err = ndgom.Simple{}.GetOne(txn, "elementName", "Test", &e2)
 	if err != nil {
 		panic(err)
 	}
 	log.Println(e2)
 
 	var e3 DbElement
-	err = ndgom.GetByID(txn, new2.UID, &e3)
+	err = ndgom.Simple{}.GetByID(txn, new2.UID, &e3)
 	if err != nil {
 		panic(err)
 	}
@@ -119,7 +119,7 @@ func main() {
 		Name: "Test3",
 	}
 
-	err = ndgom.Upd(txn, &upd1)
+	err = ndgom.Simple{}.Upd(txn, &upd1)
 	if err != nil {
 		panic(err)
 	}
@@ -133,8 +133,11 @@ func main() {
 	txn = ndgo.NewTxnWithoutContext(dg.NewTxn())
 	defer txn.Discard()
 
+	// Easy{}
+	ndgom.Easy{}.Init(dg, 0)
 	var e4 DbElement
-	err = ndgom.GetByID(txn, e2.UID, &e4)
+	e4.UID = e2.UID
+	err = ndgom.Easy{}.GetByID(&e4)
 	if err != nil {
 		panic(err)
 	}
