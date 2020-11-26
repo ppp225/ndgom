@@ -42,7 +42,7 @@ func (Stateless) GetOne(txn *ndgo.Txn, predicate, value, dgTypes string, result 
 }
 
 // New creates new node and returns uid map of created node(s)
-func (Stateless) New(txn *ndgo.Txn, obj interface{}) (uid map[string]string, err error) {
+func (Stateless) New(txn *ndgo.Txn, obj interface{}) (uidMap map[string]string, err error) {
 	resp, err := txn.Seti(obj)
 	return resp.GetUids(), err
 }
