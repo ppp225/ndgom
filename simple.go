@@ -69,7 +69,7 @@ func (Simple) Upd(txn *ndgo.Txn, obj interface{}) (err error) {
 
 func validateInput(obj interface{}) error {
 	if reflect.TypeOf(obj).Kind() != reflect.Ptr {
-		return fmt.Errorf("ndgom input needs to be *pointer, but is: %s", reflect.TypeOf(obj).Kind().String())
+		return fmt.Errorf("ndgom.validateInput: %w, but is: %s", ErrWrongInput, reflect.TypeOf(obj).Kind().String())
 	}
 	return nil
 }

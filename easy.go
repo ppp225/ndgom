@@ -111,6 +111,37 @@ func (Easy) Get(result interface{}) (err error) {
 	panic("internal error: should not have gotten here")
 }
 
+// New creates new node. Do not set UID.
+// Type can be set, if node should have multiple, and must contain dgtype.
+func (Easy) New(obj interface{}) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), txnTimeout)
+	defer cancel()
+	txn := ndgo.NewTxn(ctx, dg.NewTxn())
+	defer txn.Discard()
+
+	err = Simple{}.New(txn, obj)
+	if err != nil {
+		return err
+	}
+	return txn.Commit()
+}
+
+// Upd updates node based on uid and changed fields, and unmarshals updated result into supplied obj
+func (Easy) Upd(obj interface{}) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), txnTimeout)
+	defer cancel()
+	txn := ndgo.NewTxn(ctx, dg.NewTxn())
+	defer txn.Discard()
+
+	err = Simple{}.Upd(txn, obj)
+	if err != nil {
+		return err
+	}
+	return txn.Commit()
+}
+
+// --------------------------------------- helpers ---------------------------------------
+
 func getUID(obj interface{}) (uid string) {
 	t := reflect.TypeOf(obj).Elem()
 	// validate if fields exist how we need them
@@ -193,7 +224,7 @@ func insertPopulatedFieldsOfSingleStructIntoMap(obj interface{}, fieldValues *ma
 		case reflect.String:
 			s = f.String()
 		default:
-			panic("not implemented search for field of Kind " + ft.Kind().String())
+			log.Debugf("ndgom.Get.getPopulatedFields: skipping field od kind %s - not implemented", ft.Kind().String())
 		}
 
 		if s != "" {

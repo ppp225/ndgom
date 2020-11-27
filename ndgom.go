@@ -8,13 +8,18 @@ import "fmt"
 // simple.go - a few abstractions, gives control over transactions to user
 // stateless.go - minimal abstractions, gives nearly full control over what's happening
 
-// Stateless API Errors
-var (
-	// ErrUpsertUID happens when running upsert with wrong uid set in object. Methods: Upd
-	ErrUpsertUID = fmt.Errorf("uid of object must be set to uid(U)")
-)
-
-// Common API Errors
+// Common Errors
 var (
 	ErrNotExist = fmt.Errorf("object of requested type and uid does not exist")
+)
+
+// User Errors
+var (
+	ErrWrongInput = fmt.Errorf("input needs to be *ptr")
+)
+
+// Stateless API Errors. Don't need to be handled in higher level APIs
+var (
+	// ErrUpsertUID happens when running upsert with wrong uid set in struct. Methods: Upd
+	ErrUpsertUID = fmt.Errorf("uid of object must be set to uid(U)")
 )
