@@ -143,4 +143,18 @@ func main() {
 	}
 	log.Println(e4)
 
+	err = ndgom.Easy{}.Get(&e4)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(e4)
+
+	ndgom.Debug()
+	var e5 DbElement
+	e5.Name = "Test"
+	err = ndgom.Easy{}.Get(&e5)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(e5)
 }
