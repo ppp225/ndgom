@@ -134,6 +134,7 @@ func main() {
 	defer txn.Discard()
 
 	// Easy{}
+	log.Print("Easy{}")
 	ndgom.Easy{}.Init(dg, 0)
 	var e4 DbElement
 	e4.UID = e2.UID
@@ -150,11 +151,20 @@ func main() {
 	log.Println(e4)
 
 	ndgom.Debug()
-	var e5 DbElement
-	e5.Name = "Test"
+	e5 := DbElement{Name: "Test"}
 	err = ndgom.Easy{}.Get(&e5)
 	if err != nil {
 		panic(err)
 	}
 	log.Println(e5)
+
+	e6 := []DbElement{
+		{Name: "Test"},
+		{Name: "Test3"},
+	}
+	err = ndgom.Easy{}.Get(&e6)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(e6)
 }

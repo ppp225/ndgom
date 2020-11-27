@@ -34,7 +34,7 @@ func (Easy) Init(d *dgo.Dgraph, timeout time.Duration) {
 // Debug enables logging of debug information, like ignored fields during parsing etc.
 // Uses the default std logger
 func Debug() {
-	log.SetLevel(log.DEBUG)
+	log.SetLevel(log.NORM | log.DEBUG)
 }
 
 // GetByID makes db query by uid and unmarshals result as object
@@ -48,19 +48,21 @@ func (Easy) GetByID(result interface{}) (err error) {
 	return Simple{}.GetByID(txn, uid, result)
 }
 
-// GetByID makes db query by uid and unmarshals result as object
+// Get makes db query and populates result with found value or values.
+// If result is struct, returns first result. If is slice, returns all found results.
 func (Easy) Get(result interface{}) (err error) {
 	// pre
 	if err = validateInput(result); err != nil {
 		return err
 	}
+	kind := getKind(result)
 	ctx, cancel := context.WithTimeout(context.Background(), txnTimeout)
 	defer cancel()
 	txn := ndgo.NewTxn(ctx, dg.NewTxn())
 	defer txn.Discard()
 
 	// get values from fields, and construct query based on them
-	f := getPopulatedFields(result)
+	f := getPopulatedFields(result, kind)
 	// check if any fields are populated
 	if len(f) == 0 {
 		return fmt.Errorf("need to specify at least one struct field for Get")
@@ -69,25 +71,29 @@ func (Easy) Get(result interface{}) (err error) {
 	// check if uid query possible
 	uid, ok := f["uid"]
 	if ok {
-		if len(f) == 1 {
-			return Simple{}.GetByID(txn, uid, result)
-		}
-
-		filters := make([]string, 0, len(f)-1)
-		for k, v := range f {
-			if k == "uid" {
-				continue
+		// this is basically identical to GetByID, but with filter and checking result Kind
+		filter := ""
+		if len(f) > 1 {
+			filters := make([]string, 0, len(f)-1)
+			for k, v := range f {
+				if k == "uid" {
+					continue
+				}
+				filters = append(filters, fmt.Sprintf(`eq(%s, %s)`, k, v))
 			}
-			filters = append(filters, fmt.Sprintf(`eq(%s, "%s")`, k, v))
+			filter = "@filter(" + strings.Join(filters, " AND ") + ")" // final format is "@filter(eq(fieldName, fieldVal) AND eq(f2,v2) ...)"
 		}
-		filter := "@filter(" + strings.Join(filters, " AND ") + ")" // final format is "@filter(eq(fieldName, fieldVal) AND eq(f2,v2) ...)"
-
 		dgType := getDgType(result)
 		resp, err := ndgo.Query{}.GetUIDExpandType("q", "uid", uid, ",first: 1", filter, "uid dgraph.type", dgType).Run(txn)
 		if err != nil {
 			return err
 		}
-		return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToObject(resp.GetJson()), &result)
+		switch kind {
+		case reflect.Struct:
+			return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToObject(resp.GetJson()), &result)
+		case reflect.Slice:
+			return json.Unmarshal(ndgo.Unsafe{}.FlattenRespToArray(resp.GetJson()), &result)
+		}
 	}
 
 	// query
@@ -95,7 +101,12 @@ func (Easy) Get(result interface{}) (err error) {
 		return fmt.Errorf("One field must be populated for Get to work. Get on multiple fields not implemented yet")
 	}
 	for k, v := range f {
-		return Simple{}.GetOne(txn, k, v, result)
+		switch kind {
+		case reflect.Struct:
+			return Simple{}.GetOne(txn, k, v, result)
+		case reflect.Slice:
+			return Simple{}.Get(txn, k, v, result)
+		}
 	}
 	panic("internal error: should not have gotten here")
 }
@@ -114,10 +125,54 @@ func getUID(obj interface{}) (uid string) {
 	return uid
 }
 
-func getPopulatedFields(obj interface{}) (fields map[string]string) {
+func getKind(obj interface{}) reflect.Kind {
+	t := reflect.TypeOf(obj).Elem()
+	switch t.Kind() {
+	case reflect.Struct:
+		return reflect.Struct
+	case reflect.Slice:
+		if t.Elem().Kind() != reflect.Struct {
+			panic("not supported")
+		}
+		return reflect.Slice
+	default:
+		panic("not supported")
+	}
+}
+
+func getPopulatedFields(obj interface{}, kind reflect.Kind) (fields map[string]string) {
+	fieldValues := make(map[string][]string)
+
+	switch kind {
+	case reflect.Struct:
+		insertPopulatedFieldsOfSingleStructIntoMap(obj, &fieldValues)
+	case reflect.Slice:
+		s := reflect.ValueOf(obj).Elem()
+		for i := 0; i < s.Len(); i++ {
+			insertPopulatedFieldsOfSingleStructIntoMap(s.Index(i), &fieldValues)
+		}
+	}
+
+	// transforms array to quoted string i.e. ["val1" "val4" "some other val"], which is parsed correctly by dgraph
 	fields = make(map[string]string)
-	// validate and set uid
-	v := reflect.ValueOf(obj).Elem()
+	for k, v := range fieldValues {
+		if k == "uid" { // uid is special case of course, must be without []
+			fields[k] = strings.Join(v, ",")
+			continue
+		}
+		fields[k] = fmt.Sprintf("%q", v)
+	}
+	return fields
+}
+
+func insertPopulatedFieldsOfSingleStructIntoMap(obj interface{}, fieldValues *map[string][]string) {
+	// special case
+	// when iterating over slice elements, we already have the elements as reflect.Value
+	v, ok := obj.(reflect.Value)
+	if !ok {
+		v = reflect.ValueOf(obj).Elem()
+	}
+
 	vt := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Field(i)
@@ -134,7 +189,7 @@ func getPopulatedFields(obj interface{}) (fields map[string]string) {
 		s := ""
 		switch ft.Kind() {
 		case reflect.Slice:
-			log.Debugf("searching on slice not implemented")
+			log.Debugf("ndgom.Get.getPopulatedFields: skipping slice field - not implemented")
 		case reflect.String:
 			s = f.String()
 		default:
@@ -142,9 +197,8 @@ func getPopulatedFields(obj interface{}) (fields map[string]string) {
 		}
 
 		if s != "" {
-			fields[predicateName] = s
+			(*fieldValues)[predicateName] = append((*fieldValues)[predicateName], s)
 		}
 	}
 	// log.Debugf("---\n")
-	return fields
 }

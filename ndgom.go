@@ -3,7 +3,7 @@ package ndgom
 import "fmt"
 
 // This file groups common elements for all ndgom APIs
-// Each API is hosted in it's own seperate file, see them for implementation details:
+// Each API is hosted in it's own separate file, see them for implementation details:
 // easy.go - all abstractions, easiest to use
 // simple.go - a few abstractions, gives control over transactions to user
 // stateless.go - minimal abstractions, gives nearly full control over what's happening
